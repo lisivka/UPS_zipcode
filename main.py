@@ -78,20 +78,46 @@ def read_excel_file(file_path):
 
 
 if __name__ == '__main__':
-    ## 1) Загрузка файла
+
+
+    ## 1) Чтение файла Excel
+    file_path = 'Inbox Data/Carriers zone ranges.xlsx'
+    sheet_name = 'UPS zip ranges'
+    zip_band_list, zip_band_dict = read_zip_band_from_file(file_path, sheet_name)
+
+    ## 2) Загрузка файла
     url = 'https://www.ups.com/media/us/currentrates/zone-csv/011.xls'
     folder_path = 'zip_code'
-    # Сразу переименовываем файл в *.xlsx
-    file_name = '011.xlsx'
 
-    download_file(url, folder_path, file_name)
+    # Отключить после тестирования
+    count = 0
+    end = 7
 
-    ## 2) Чтение файла Excel
-    # file_path = 'Inbox Data/Carriers zone ranges.xlsx'
-    # sheet_name = 'UPS zip ranges'
+    # ----------------------------
+
+    for zip_band in zip_band_list[5:]: # Пропускаем первый элемент, т.к. он не нужен
+        zip_start = zip_band[0]
+        zip_end = zip_band[1]
+        name = zip_start[:-2]
+        url = f'https://www.ups.com/media/us/currentrates/zone-csv/{name}.xls'
+        # Сразу переименовываем файл в *.xlsx
+        file_name = f'{name}.xlsx'
+        download_file(url, folder_path, file_name)
+
+        # Отключить после тестирования
+        count += 1
+        if count == end:
+            break
+        # ----------------------------
+        file_path = folder_path + '/' + file_name
+        read_excel_file(file_path)
+
+
+    # file_name = '011.xlsx'
     #
-    # read_zip_band_from_file(file_path, sheet_name)
+    # download_file(url, folder_path, file_name)
 
     ## 3) Чтение полученого файла Excel и поиск чисел
-    file_path = 'zip_code/011.xlsx'
-    read_excel_file(file_path)
+    # file_path = 'zip_code/011.xlsx'
+
+    # read_excel_file(file_path)
