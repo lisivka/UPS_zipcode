@@ -2,9 +2,7 @@ import os
 import urllib.request
 import ssl
 import openpyxl
-
 import re
-import openpyxl
 
 
 def download_file(url, folder_path, file_name):
@@ -38,7 +36,7 @@ def read_zip_band_from_file(file_path, sheet_name):
     rows = sheet.iter_rows()
 
     # {zip_start: [zip_start, zip_end], ...} = '00500': ['00500', '00599']
-    zip_band_dict = {row[0].value.split("-")[0]:row[0].value.split("-") for row in rows if row[0].value}
+    zip_band_dict = {row[0].value.split("-")[0]: row[0].value.split("-") for row in rows if row[0].value }
 
     # [[zip_start, zip_end], [zip_start, zip_end], ...] = ['00500', '00599'], ['01000', '01099'], ['01100', '01199'],
     zip_band_list = [value for key, value in zip_band_dict.items()]
@@ -51,6 +49,7 @@ def read_zip_band_from_file(file_path, sheet_name):
     print(zip_band_dict)
     print(zip_band_list)
     return zip_band_list, zip_band_dict
+
 
 def read_excel_file(file_path):
     # Открытие файла Excel
@@ -71,46 +70,134 @@ def read_excel_file(file_path):
 
     # Вывод чисел
     if len(matches) == 2:
-        print(matches[0], matches[1])
+        ref_start = matches[0].replace("-","") # Удаляем символ "-" 012-34 -> 01234 Референсный диапазон zip кодов
+        ref_end = matches[1].replace("-","")
+        print(ref_start, ref_end)
     else:
         print('Найдено неверное количество чисел в строке')
 
+    return ref_start, ref_end
 
 
-if __name__ == '__main__':
+def download_and_check_zones(zip_band_list, folder_path, count_files=None):
 
-
-    ## 1) Чтение файла Excel
-    file_path = 'Inbox Data/Carriers zone ranges.xlsx'
-    sheet_name = 'UPS zip ranges'
-    zip_band_list, zip_band_dict = read_zip_band_from_file(file_path, sheet_name)
-
-    ## 2) Загрузка файла
-    url = 'https://www.ups.com/media/us/currentrates/zone-csv/011.xls'
-    folder_path = 'zip_code'
-
-    # Отключить после тестирования
     count = 0
-    end = 7
-
-    # ----------------------------
-
-    for zip_band in zip_band_list[5:]: # Пропускаем первый элемент, т.к. он не нужен
+    for zip_band in zip_band_list[1:]:  # Пропускаем первый элемент - это заголовок
         zip_start = zip_band[0]
         zip_end = zip_band[1]
-        name = zip_start[:-2]
+        name = zip_start[:-2]  # Удаляем последние 2 символа для загрузки файла например 011.xls
         url = f'https://www.ups.com/media/us/currentrates/zone-csv/{name}.xls'
         # Сразу переименовываем файл в *.xlsx
         file_name = f'{name}.xlsx'
         download_file(url, folder_path, file_name)
 
+        # Чтение полученого файла Excel и поиск диапазона чисел
+        file_path = folder_path + '/' + file_name
+        ref_start, ref_end = read_excel_file(file_path)
+        # 00501-1 <= 00500 <= 00599 and 00599 >= 00599
+        if int(ref_start)-1<= int(zip_start) <=int(ref_end)  and int(zip_end) == int(ref_end):
+
+            print('Диапазоны совпадают')
+
+        else:
+            print('Диапазоны не совпадают')
+
+            print(f'Диапазон zip кодов из файла {file_name} = {ref_start} - {ref_end}')
+            print(f'Диапазон zip кодов из файла Carriers zone ranges.xlsx = {zip_start} - {zip_end}')
+
         # Отключить после тестирования
         count += 1
-        if count == end:
+        if count == count_files:
             break
         # ----------------------------
-        file_path = folder_path + '/' + file_name
-        read_excel_file(file_path)
+
+
+
+
+if __name__ == '__main__':
+
+    ## 1) Чтение файла Excel получение  диапазонов zip кодов
+    file_path = 'Inbox Data/Carriers zone ranges.xlsx'
+    sheet_name = 'UPS zip ranges'
+    zip_band_list, zip_band_dict = read_zip_band_from_file(file_path, sheet_name)
+
+    ## 2) Загрузка файлов
+
+    folder_path = 'Zip_code'
+    # Отключить после тестирования установить end = 0
+    count_files = 1  # Количество файлов для загрузки (для тестирования) None - все файлы
+    download_and_check_zones(zip_band_list, folder_path,  count_files)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # for zip_band in zip_band_list[1:]: # Пропускаем первый элемент - это заголовок
+    #     zip_start = zip_band[0]
+    #     zip_end = zip_band[1]
+    #     name = zip_start[:-2] # Удаляем последние 2 символа для загрузки файла например 011.xls
+    #     url = f'https://www.ups.com/media/us/currentrates/zone-csv/{name}.xls'
+    #     # Сразу переименовываем файл в *.xlsx
+    #     file_name = f'{name}.xlsx'
+    #     download_file(url, folder_path, file_name)
+    #
+    #     # Отключить после тестирования
+    #     count += 1
+    #     if count == end:
+    #         break
+    #     # ----------------------------
+    #
+    #     # Чтение полученого файла Excel и поиск диапазона чисел
+    #     file_path = folder_path + '/' + file_name
+    #     ref_start, ref_end = read_excel_file(file_path)
+    #     if ref_start == zip_start and ref_end == zip_end:
+    #         print('Диапазоны совпадают')
+    #     else:
+    #         print('Диапазоны не совпадают')
+
+    # for key, value in zip_band_dict.items():
+    #     # print(key, value)
+    #     zip_start = value[0]
+    #     if zip_start.isnumeric() == False:
+    #         continue
+    #     zip_end = value[1]
+    #     name = zip_start[:-2]  # Удаляем последние 2 символа
+    #     url = f'https://www.ups.com/media/us/currentrates/zone-csv/{name}.xls'
+    #     # Сразу переименовываем файл в *.xlsx
+    #     file_name = f'{name}.xlsx'
+    #     download_file(url, folder_path, file_name)
+    #
+    #     # Отключить после тестирования
+    #     count += 1
+    #     if count == end:
+    #         break
+    #     # ----------------------------
+    #
+    #     # Чтение полученого файла Excel и поиск диапазона чисел
+    #     file_path = folder_path + '/' + file_name
+    #     ref_start, ref_end = read_excel_file(file_path)
+    #     if ref_start == zip_start and ref_end == zip_end:
+    #         print('Диапазоны совпадают')
+    #     else:
+    #         print('Диапазоны не совпадают')
+    #
+
 
 
     # file_name = '011.xlsx'
