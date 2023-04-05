@@ -3,37 +3,36 @@ import urllib.request
 import ssl
 import openpyxl
 import re
-from openpyxl import Workbook
+
 
 
 def download_file(url, folder_path, file_name):
-    # Создание папки, если она не существует
+
+    # Create a folder if it does not exist
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
-    # Полный путь к файлу
+    # Full path to file
     file_path = os.path.join(folder_path, file_name)
 
-    # Создание безопасного контекста SSL
+    # Create a secure SSL context
     context = ssl.create_default_context()
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
 
-    # Загрузка файла с помощью безопасного контекста SSL
+    # Download file with secure SSL context
     with urllib.request.urlopen(url, context=context) as u, open(file_path, 'wb') as f:
         f.write(u.read())
-
-    print(f'Файл {file_name} загружен и сохранен в папке {folder_path}')
+    print(f"File {file_name} downloaded and saved in folder {folder_path}")
+    return
 
 
 def read_zip_band_from_file(file_path, sheet_name):
-    # Открытие файла Excel
-    workbook = openpyxl.load_workbook(file_path, data_only=True)  # data_only=True - получение значений, а не формул
 
-    # Получение листа
+    workbook = openpyxl.load_workbook(file_path, data_only=True)  # data_only=True - получение значений, а не формул
     sheet = workbook[sheet_name]
 
-    # Получение всех строк
+    #Get all rows
     rows = sheet.iter_rows()
 
     # {zip_start: [zip_start, zip_end], ...} = '00500': ['00500', '00599']
@@ -41,140 +40,156 @@ def read_zip_band_from_file(file_path, sheet_name):
 
     # [[zip_start, zip_end], [zip_start, zip_end], ...] = ['00500', '00599'], ['01000', '01099'], ['01100', '01199'],
     zip_band_list = [value for key, value in zip_band_dict.items()]
-    # print(zip_band_dict)
+
+    zip_band_list.pop(0) # Delete first element - it is a header
+
     print(zip_band_list)
+    print()
+
     return zip_band_list, zip_band_dict
 
 
-def read_excel_file(file_path):
-    # Открытие файла Excel
-    workbook = openpyxl.load_workbook(file_path)
+def get_reference_range(file_path):
 
-    # Получение активного листа
+    workbook = openpyxl.load_workbook(file_path)
     sheet = workbook.active
 
-    # Получение 5 строки
+    # Get the 5th row, where the zip code range is specified for verification
     row = sheet[5]
 
-    # Получение текста из ячеек строки
     row_text = [str(cell.value) for cell in row]
 
-    # Поиск чисел в тексте строки
+    # Search for numbers in the text of the line
+    # Convert to string in format 01234
     pattern = r'\d{3}-\d{2}'
     matches = re.findall(pattern, ' '.join(row_text))
-
-    # Вывод чисел
     if len(matches) == 2:
         ref_start = matches[0].replace("-", "")  # Удаляем символ "-" 012-34 -> 01234 Референсный диапазон zip кодов
         ref_end = matches[1].replace("-", "")
-        print(ref_start, ref_end)
+
+        print(f"Reference range is {ref_start} {ref_end} for {file_path}")
     else:
-        print('Найдено неверное количество чисел в строке')
+        print("ERROR - Find incorrect number of numbers in the line")
 
     return ref_start, ref_end
 
 
 def download_all_files(zip_band_list, url, folder_path, count_files=None):
     count = 0
-    for index, zip_band in enumerate(zip_band_list[1:]):  # Пропускаем первый элемент - это заголовок
+    index = 0
+    while index < len(zip_band_list[:]):# skip first element - it is a header
+        zip_band = zip_band_list[index]
         zip_start = zip_band[0]
         zip_end = zip_band[1]
-        name = zip_start[:-2]  # Удаляем последние 2 символа для загрузки файла например 011.xls
 
-        url_file = url + f'{name}.xls'  ## url_file = f'https://www.ups.com/media/us/currentrates/zone-csv/{name}.xls'
+        name = zip_start[:-2]  # Delete last 2 symbols for download file for example 011.xls
 
-        file_name = f'{name}.xlsx'  # Сразу переименовываем файл в *.xlsx
+        url_file = url + f'{name}.xls'  # url_file = f'https://www.ups.com/media/us/currentrates/zone-csv/{name}.xls'
+        file_name = f'{name}.xlsx'  # Rename file to *.xlsx
+
         download_file(url_file, folder_path, file_name)
         check, ref_start, ref_end = check_zip_code_from_load_file(folder_path, file_name, zip_start, zip_end)
         if check == False:
             expand_zip_band_list(zip_band_list, index, ref_start, ref_end, zip_start, zip_end)
+            # print(index, zip_band_list[index], zip_band_list[index + 1], zip_band_list[index + 2])
 
 
-        # Отключить после тестирования
+        index += 1
+
+        # limit download files
         count += 1
         if count == count_files:
+            print(f"--- WARNING --- Limit download files = {count_files}")
             break
         # ----------------------------
+    return
+
 
 def expand_zip_band_list(zip_band_list, index, ref_start, ref_end, zip_start, zip_end):
-    len_r_start = len(ref_start)-len(str(int(ref_start)))
+    len_r_start = len(ref_start) - len(str(int(ref_start)))
     len_r_end = len(ref_end) - len(str(int(ref_end)))
     len_z_end = len(zip_end) - len(str(int(zip_end)))
 
-    zip_band_list[index+1] = ["0"*len_r_start+str(int(ref_start) - 1),"0"*len_r_end+str( int(ref_end))]
-    zip_band_list.insert(index + 2, ["0"*len_r_end+str(int(ref_end)+1), "0"*len_z_end+str(int(zip_end))])
+    # convert to string in format 01234
+    zip_band_list[index ] = ["0" * len_r_start + str(int(ref_start) - 1), "0" * len_r_end + str(int(ref_end))]
 
+    # ВНИМАНИЕ! Возможно зацикливание, с бесконечным расширением диапазона
+    # расширяем диапазон zip кодов, ТОЛЬКО если zip_end > ref_конец
+    # WARNING! Infinite expansion of the range is possible
+    # expand the range of zip codes ONLY if zip_end > ref_end
 
+    if int(zip_end)>int(ref_end):
+        zip_band_list.insert(index + 1, ["0" * len_r_end + str(int(ref_end) + 1), "0" * len_z_end + str(int(zip_end))])
 
-    pass
+    return
+
 
 def check_zip_code_from_load_file(folder_path, file_name, zip_start, zip_end):
     # Чтение полученого файла Excel и поиск диапазона чисел
     file_path = folder_path + '/' + file_name
-    ref_start, ref_end = read_excel_file(file_path)
+    ref_start, ref_end = get_reference_range(file_path)
     # 00501-1 <= 00500 <= 00599 and 00599 >= 00599
     if int(ref_start) - 1 <= int(zip_start) <= int(ref_end) and int(zip_end) == int(ref_end):
 
-        print('Диапазоны совпадают')
+        print(f'Diapason is TRUE for {file_name}')
+        print("---------------------------------")
         answer = True
     else:
-        print('Диапазоны не совпадают')
-
-        print(f'Диапазон zip кодов из файла {file_name} = {ref_start} - {ref_end}')
-        print(f'Диапазон zip кодов из файла Carriers zone ranges.xlsx = {zip_start} - {zip_end}')
+        print(" ---- WARNING - Diapason is FALSE ---- ")
+        print(f'Diapason getting from user {zip_start} - {zip_end}')
+        print(f'Diapason is FALSE for {file_name} {ref_start} - {ref_end}')
+        print("---------------------------------")
         answer = False
     return answer, ref_start, ref_end
 
-def write_data_to_txt(file_name):
+
+def write_data_to_txt(file_name, zip_band_list):
     with open(file_name, "w") as f:
-        f.write(f"UPS zone ranges,	zip from,	zip to\n")
-        for item in zip_band_list[1:]:
+        f.write(f"UPS zone ranges,	zip from,	zip to\n") # Header
+        for item in zip_band_list:
             f.write(f"{item[0]}-{item[1]},{item[0]}, {item[1]}\n")
 
 
+def write_to_excel(file_path, zip_band_list):
+    # Create new Excel file and add a worksheet.
+    wb = openpyxl.Workbook()
+    sheet = wb.active  # New sheet
+    sheet.title = "UPS zip ranges"
+    sheet.append(["UPS zone ranges", "zip from", "zip to"])  # Header
 
-def txt_to_xlsx(input_file, output_file):
+    # Save elements to Excel cells
+    for row in zip_band_list:
+        row_xlsx = [f"{row[0]}-{row[1]}", row[0], row[1]]
+        sheet.append(row_xlsx)
 
-    wb = Workbook()
-    ws = wb.active # New sheet
-    ws.title = "UPS zip ranges"
-    with open(input_file, 'r') as f:
-        lines = f.readlines()
-        for row_idx, line in enumerate(lines):
-
-            # Split line into elements
-            elements = line.strip().split(',')
-            # Save elements to Excel cells
-            for col_idx, element in enumerate(elements):
-                ws.cell(row=row_idx+1, column=col_idx+1, value=element)
-    wb.save(output_file)
-    print("File saved!")
-
-
+    wb.save(file_path)
+    print("=============================")
+    print(f"The file [{file_path}] saved!")
+    return
 
 
 if __name__ == '__main__':
-    ## 1) Чтение входящего файла Excel получение  диапазонов zip кодов
+    ## 1) Read the incoming Excel file to get the zip code ranges
     file_path = 'Inbox Data/Carriers zone ranges.xlsx'
     sheet_name = 'UPS zip ranges'
     zip_band_list, zip_band_dict = read_zip_band_from_file(file_path, sheet_name)
 
-
-    # ## 2) Загрузка файлов и проверка диапазонов zip кодов из загруженных файлов
+    ## 2) Download files from the site and check the zip code ranges from the downloaded files
     url = r'https://www.ups.com/media/us/currentrates/zone-csv/'
-    folder_path = 'Output Data'
+    folder_output = 'Output Data'
 
-    # # После тестирования установить None
-    count_files = 20  # Количество файлов для загрузки (для тестирования) None - все файлы
-    download_all_files(zip_band_list, url, folder_path, count_files)
+    # COUNT_FILES = None for all files, for test = 20
+    COUNT_FILES = 10
 
-    ## 3) Запись в файл исправленого диапазона Для простоты проверки в IDE запись в txt, а затем в xlsx
-    file_txt = f"{folder_path}/output.txt"
-    write_data_to_txt(file_txt)
-    txt_to_xlsx(file_txt, f"{folder_path}/NEW Carriers zone ranges.xlsx")
+    download_all_files(zip_band_list, url, folder_output, COUNT_FILES)
 
+    ## 3) Save to .xlsx file the corrected range.
 
-    print(zip_band_list)
+    file_xlsx = f"{folder_output}/NEW Carriers zone ranges.xlsx"
+    write_to_excel(file_xlsx, zip_band_list)
 
+    ## 4) Save .txt file. (For ease of checking in the IDE write to txt)
+    file_txt = f"{folder_output}/output.txt"
+    write_data_to_txt(file_txt, zip_band_list)
 
-
+    # print(zip_band_list)
