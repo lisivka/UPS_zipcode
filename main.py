@@ -179,7 +179,8 @@ if __name__ == '__main__':
     folder_output = 'Output Data'
 
     # COUNT_FILES = None for all files, for test = 20
-    COUNT_FILES = 10
+    COUNT_FILES = 20
+    # COUNT_FILES = None
 
     download_all_files(zip_band_list, url, folder_output, COUNT_FILES)
 
