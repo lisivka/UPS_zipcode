@@ -6,7 +6,9 @@ pip install -r requirements.txt
 
 ## UPS_zipcode
 
+This is the solution to a test task.
 
+Description of customer requirements in the *.rtf file in the folder [Inbox date]
 
 The program downloads zip code ranges from the UPS website and saves them in the file.
     
@@ -15,7 +17,7 @@ The program downloads zip code ranges from the UPS website and saves them in the
 
 Input data in the `[Inbox Data]` folder
 
-Downloaded data in the `[Output Date]` folder
+Downloaded data in the `[Output Data]` folder
 
 The file with the input ranges can be opened by the user, so the file with the corrected ranges is saved in the `[Output Date]` folder.
 
